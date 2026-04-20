@@ -1,0 +1,19 @@
+services:
+  vecstore:
+    build: .
+    image: vecstore:dev
+    ports:
+      - "8888:8888"
+    environment:
+      PORT: "8888"
+      VECTOR_DIMENSION: "100"
+      LOG_LEVEL: "info"
+      SNAPSHOT_PATH: "/data/snapshot.bin"
+      SNAPSHOT_INTERVAL: "300s"
+      INITIAL_CAPACITY: "1300000"
+    volumes:
+      - snapshot:/data
+    restart: unless-stopped
+
+volumes:
+  snapshot:

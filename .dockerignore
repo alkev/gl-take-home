@@ -1,0 +1,17 @@
+.git
+.github
+.claude
+.DS_Store
+bin/
+docs/
+bench/
+testdata/
+*.md
+*.test
+*.out
+coverage.*
+Makefile
+.golangci.yml
+.gitignore
+docker-compose.yml
+Dockerfile

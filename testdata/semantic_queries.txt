@@ -1,0 +1,140 @@
+# Semantic plausibility fixture for the `cmd/semcheck` harness.
+#
+# Format (one query per non-comment line):
+#     query    plausible1,plausible2,plausible3,...
+#
+# Harness logic: for each query, call /nearest?word=<query>&k=1 against a
+# loaded GloVe store and check whether the returned top-1 label is in the
+# comma-separated expected set. GloVe is uncased so all entries are lowercase.
+#
+# The expected sets are deliberately broad — GloVe's neighbourhoods are
+# semantically plausible but not always the "most expected" specific word.
+
+# Royalty & power
+king		queen,prince,emperor,monarch,kingdom,ruler,reign
+queen		king,princess,elizabeth,throne,regina,monarch
+prince		king,princess,duke,royal,charles
+princess		queen,prince,royal,diana,duchess
+emperor		king,emperors,empire,roman,dynasty
+monarch		king,queen,ruler,sovereign,reign
+
+# Family
+mother		father,daughter,mom,parent,wife,sister
+father		mother,son,dad,parent,husband,brother
+son		daughter,father,mother,child,nephew
+daughter		son,mother,father,child,niece
+brother		sister,brothers,cousin,son,nephew
+sister		brother,sisters,mother,aunt,niece
+
+# Animals
+dog		cat,dogs,puppy,pet,canine,pig
+cat		dog,cats,kitten,pet,feline,rabbit
+horse		horses,cattle,pony,mare,stallion,cow
+cow		cattle,cows,bull,pig,sheep
+elephant		elephants,giraffe,rhinoceros,lion,zoo
+lion		lions,tiger,leopard,jaguar,cheetah,elephant,beast,bear
+tiger		lion,tigers,bengal,cat,leopard
+bird		birds,species,hawk,eagle,sparrow
+fish		fishes,fishing,salmon,shark,ocean
+snake		snakes,python,cobra,serpent,reptile
+wolf		wolves,wolf,wild,coyote,fox
+
+# Colors
+red		blue,green,yellow,black,white,orange
+blue		red,green,yellow,black,white,orange
+green		blue,red,yellow,white,black,orange
+yellow		red,green,blue,white,orange,black
+black		white,red,dark,blue,color
+white		black,red,blue,dark,color
+
+# Body
+head		body,face,hand,neck,heads
+hand		hands,arm,finger,feet,foot
+eye		eyes,face,head,ear,nose
+foot		feet,leg,hand,hands,ankle
+heart		hearts,cardiac,lungs,soul,minds,blood,brain,pain
+
+# Countries & cities
+france		french,spain,germany,paris,italy,europe
+germany		german,france,austria,europe,berlin
+japan		japanese,korea,china,asia,tokyo
+china		chinese,japan,taiwan,asia,beijing
+england		english,britain,london,scotland,wales
+spain		spanish,portugal,italy,france,mexico
+italy		italian,spain,france,rome,europe
+russia		russian,soviet,moscow,ukraine,putin
+mexico		mexican,spain,argentina,brazil,america
+brazil		brazilian,argentina,mexico,peru,chile
+
+paris		france,london,french,cities,berlin,rome
+london		paris,england,british,britain,cities
+tokyo		japan,japanese,seoul,beijing,osaka
+berlin		germany,german,vienna,munich,europe
+moscow		russia,russian,kiev,petersburg,soviet
+rome		italy,italian,greek,roman,milan
+
+# Verbs & actions
+run		running,runs,runner,chase,ran
+walk		walking,walks,walked,stroll,run
+jump		jumps,jumped,jumping,leap,hop
+eat		eating,eats,ate,food,drinking
+drink		drinking,drinks,drank,beer,wine
+sleep		sleeping,sleeps,slept,bed,awake
+swim		swimming,swam,swims,pool,dive
+fly		flying,flew,flies,plane,bird
+
+# Feelings
+happy		glad,pleased,happier,feel,joyful
+sad		unhappy,tragic,sorrow,sadder,feel
+angry		anger,mad,frustrated,furious,upset
+love		loves,loved,loving,passion,heart
+fear		feared,fears,afraid,feared,worry
+
+# Time
+day		days,night,week,month,year
+night		nights,day,evening,morning,late
+morning		evening,afternoon,night,dawn,early
+year		years,decade,month,annual,season
+week		weeks,month,year,days,weekly
+
+# Transport & technology
+car		cars,vehicle,truck,driving,automobile
+truck		trucks,car,vehicle,trailer,bus
+bike		bicycle,biking,bikes,cycling,motorcycle
+plane		planes,aircraft,flight,flying,airplane
+computer		computers,software,machine,laptop,electronic
+phone		phones,telephone,call,mobile,cell
+internet		web,online,net,website,access
+
+# Food
+food		foods,eat,meal,eating,cuisine
+bread		loaf,bakery,loaves,wheat,cheese,baked,flour,butter,cake
+wine		wines,beer,vineyard,champagne,whisky
+water		drinking,river,waters,sea,lake
+fire		fires,flames,flame,burn,smoke
+
+# Abstract
+good		great,well,nice,better,decent
+bad		worse,terrible,awful,poor,horrible
+big		large,huge,bigger,small,massive
+small		smaller,tiny,little,smallest,large
+fast		faster,quickly,quick,speed,slow
+slow		slower,slowly,slowest,faster,pace
+
+# Science / math
+math		mathematics,physics,algebra,calculus,science
+science		sciences,scientific,research,physics,chemistry
+physics		mathematics,chemistry,biology,science,theoretical
+chemistry		biology,physics,chemistries,organic,biochemistry
+biology		biological,chemistry,genetics,physiology,ecology
+
+# Miscellaneous
+book		books,novel,reading,author,published
+music		musical,musician,song,jazz,band
+art		arts,artist,painting,artistic,culture
+money		cash,dollars,finance,wealth,banking
+school		schools,college,education,students,university
+doctor		doctors,physician,medical,hospital,nurse
+hospital		hospitals,clinic,medical,patients,doctors
+war		wars,battle,conflict,soldiers,military
+peace		peaceful,war,harmony,tranquility,ceasefire,negotiations,accord,reconciliation,talks
