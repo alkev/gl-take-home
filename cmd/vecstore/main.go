@@ -52,6 +52,13 @@ func main() {
 					slog.Int("vectors", s.Len()),
 					slog.Int64("duration_ms", time.Since(start).Milliseconds()))
 			}
+		} else if errors.Is(statErr, os.ErrNotExist) {
+			logger.Info("no snapshot found; starting empty (will write on first periodic tick)",
+				slog.String("path", cfg.SnapshotPath))
+		} else {
+			logger.Warn("snapshot stat failed; starting empty",
+				slog.String("path", cfg.SnapshotPath),
+				slog.Any("err", statErr))
 		}
 	}
 

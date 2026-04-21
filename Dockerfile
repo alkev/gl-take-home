@@ -18,10 +18,18 @@ RUN mkdir -p /src/cmd/healthcheck && \
     -trimpath -ldflags="-s -w" \
     -o /out/healthcheck ./cmd/healthcheck
 
+# Pre-seed /data in the build stage so the runtime image declares it as
+# owned by the distroless nonroot UID (65532). Docker populates empty
+# named volumes from the image's directory contents on first mount,
+# inheriting this ownership — without this, /data defaults to root and
+# the nonroot process can't write snapshots.
+RUN install -d -o 65532 -g 65532 /out/data
+
 # ─── runtime stage ──────────────────────────────────────────────
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/vecstore    /vecstore
 COPY --from=build /out/healthcheck /healthcheck
+COPY --from=build --chown=65532:65532 /out/data /data
 USER nonroot:nonroot
 ENV PORT=8888 VECTOR_DIMENSION=100 LOG_LEVEL=info
 EXPOSE 8888

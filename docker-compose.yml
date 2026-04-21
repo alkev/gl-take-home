@@ -14,6 +14,11 @@ services:
     volumes:
       - snapshot:/data
     restart: unless-stopped
+    # Give the service time to drain in-flight HTTP (15s ceiling in main.go)
+    # AND write a 520 MB snapshot (a few seconds + fsync). Docker's default
+    # stop_grace_period is 10s — SIGKILL arrives mid-snapshot and the .tmp is
+    # discarded. 60s covers the worst case comfortably.
+    stop_grace_period: 60s
 
 volumes:
   snapshot:
