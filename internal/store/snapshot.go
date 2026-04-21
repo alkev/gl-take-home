@@ -24,8 +24,18 @@ var (
 // ErrCorruptSnapshot indicates a snapshot file is structurally invalid.
 var ErrCorruptSnapshot = errors.New("corrupt snapshot")
 
-// Save writes a snapshot atomically to path (path.tmp then rename).
+// Save writes a snapshot atomically to path (path.tmp then rename). If the
+// store has no new inserts since the last successful Save / Load, returns
+// ErrNoChanges without touching disk.
 func (s *Store) Save(path string) error {
+	s.mu.RLock()
+	if !s.dirty {
+		s.mu.RUnlock()
+		return ErrNoChanges
+	}
+	nAtStart := s.n
+	s.mu.RUnlock()
+
 	tmp := path + ".tmp"
 	f, err := os.Create(tmp)
 	if err != nil {
@@ -108,7 +118,19 @@ func (s *Store) Save(path string) error {
 		_ = os.Remove(tmp)
 		return err
 	}
-	return os.Rename(tmp, path)
+	if err := os.Rename(tmp, path); err != nil {
+		return err
+	}
+
+	// Clear dirty only if no inserts happened during the save. If n grew
+	// while we were serialising, those rows aren't in the file we just
+	// renamed, so leave dirty set and let the next Save pick them up.
+	s.mu.Lock()
+	if s.n == nAtStart {
+		s.dirty = false
+	}
+	s.mu.Unlock()
+	return nil
 }
 
 // Load reads a snapshot from path and replaces the current store contents.
@@ -152,6 +174,7 @@ func (s *Store) Load(path string) error {
 	s.byUUID = make(map[uuid.UUID]int, count)
 	s.byLabel = make(map[string]int, count)
 	s.n = 0
+	s.dirty = false
 
 	off := 24
 	meta := make([]rowMeta, count)

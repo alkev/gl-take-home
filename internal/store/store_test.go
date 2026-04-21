@@ -364,6 +364,47 @@ func TestSnapshotRoundTrip(t *testing.T) {
 	}
 }
 
+func TestSnapshotSkipsWhenClean(t *testing.T) {
+	tmp := t.TempDir() + "/snap.bin"
+	s := New(3, 4, 0)
+	if _, err := s.InsertOne("alpha", []float32{1, 0, 0}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Save(tmp); err != nil {
+		t.Fatalf("first Save: %v", err)
+	}
+	// No inserts since last save → second Save must skip.
+	if err := s.Save(tmp); !errors.Is(err, ErrNoChanges) {
+		t.Fatalf("Save on clean store: got %v, want ErrNoChanges", err)
+	}
+	// A fresh insert re-dirties the store and Save writes again.
+	if _, err := s.InsertOne("beta", []float32{0, 1, 0}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Save(tmp); err != nil {
+		t.Fatalf("Save after new insert: %v", err)
+	}
+}
+
+func TestLoadClearsDirty(t *testing.T) {
+	tmp := t.TempDir() + "/snap.bin"
+	src := New(3, 4, 0)
+	if _, err := src.InsertOne("alpha", []float32{1, 0, 0}); err != nil {
+		t.Fatal(err)
+	}
+	if err := src.Save(tmp); err != nil {
+		t.Fatal(err)
+	}
+	dst := New(3, 4, 0)
+	if err := dst.Load(tmp); err != nil {
+		t.Fatal(err)
+	}
+	// A just-loaded store matches disk, so Save should skip.
+	if err := dst.Save(tmp); !errors.Is(err, ErrNoChanges) {
+		t.Fatalf("Save immediately after Load: got %v, want ErrNoChanges", err)
+	}
+}
+
 func TestSnapshotLoadCorruptMagic(t *testing.T) {
 	tmp := t.TempDir() + "/bad.bin"
 	if err := os.WriteFile(tmp, []byte("NOTVALIDFILE"), 0o600); err != nil {

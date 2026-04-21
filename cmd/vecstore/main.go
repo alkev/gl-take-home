@@ -100,12 +100,18 @@ func makeSnapshotFn(cfg *config.Config, s *store.Store, logger *slog.Logger) fun
 	}
 	return func() (string, int64, error) {
 		start := time.Now()
-		if err := s.Save(cfg.SnapshotPath); err != nil {
+		err := s.Save(cfg.SnapshotPath)
+		if errors.Is(err, store.ErrNoChanges) {
+			logger.Info("snapshot skipped (no changes)",
+				slog.String("path", cfg.SnapshotPath))
+			return cfg.SnapshotPath, 0, nil
+		}
+		if err != nil {
 			return cfg.SnapshotPath, 0, err
 		}
-		fi, err := os.Stat(cfg.SnapshotPath)
+		fi, statErr := os.Stat(cfg.SnapshotPath)
 		var size int64
-		if err == nil {
+		if statErr == nil {
 			size = fi.Size()
 		}
 		logger.Info("snapshot written",

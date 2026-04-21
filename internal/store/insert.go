@@ -38,6 +38,7 @@ func (s *Store) InsertOne(label string, data []float32) (uuid.UUID, error) {
 	s.meta = append(s.meta, rowMeta{UUID: id, Label: label})
 	s.byUUID[id] = rowIdx
 	s.byLabel[lower] = rowIdx
+	s.dirty = true
 	return id, nil
 }
 
@@ -86,6 +87,7 @@ func (s *Store) InsertBatch(in []Input) ([]uuid.UUID, error) {
 		s.byLabel[lowers[i]] = rowIdx
 		ids[i] = id
 	}
+	s.dirty = true
 	return ids, nil
 }
 

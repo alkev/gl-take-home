@@ -16,7 +16,11 @@ type Store struct {
 	byUUID    map[uuid.UUID]int
 	byLabel   map[string]int
 	n         int
-	mu        sync.RWMutex
+	// dirty is true iff there have been inserts since the last successful
+	// Save / Load. Save returns ErrNoChanges when dirty is false so the
+	// caller can skip disk I/O. Protected by mu along with everything else.
+	dirty bool
+	mu    sync.RWMutex
 }
 
 // New returns an empty store. chunkSize must be > 0. initialCap (rows) is a
