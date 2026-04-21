@@ -346,7 +346,7 @@ GET p50 < 0.5 ms: lookup is a single map access + memcpy of 400 bytes of float d
 
 3. **The query word is excluded from `/nearest` results.** Without this, `k=1` always returns the query itself at similarity 1.0, which is useless.
 
-4. **Only one third-party dependency: `google/uuid`.** HTTP routing uses stdlib `net/http` with Go 1.22+ method-aware patterns. JSON uses stdlib `encoding/json` — it meets every target with 10×+ headroom. If future profiling shows JSON as the bottleneck, the drop-in replacement is `goccy/go-json` (API-compatible, 2-3× faster, adds `unsafe` usage and one dep). Rationale in `docs/assumptions.md`.
+4. **One third-party dependency: `google/uuid`.** HTTP routing uses stdlib `net/http` with Go 1.22+ method-aware patterns. JSON uses stdlib `encoding/json` — we experimented with `goccy/go-json` but reverted after it regressed concurrent p99 (its runtime type cache contends under heavy fan-out). A pooled `bytes.Buffer` wrapper around the stdlib encoder was also tried and reverted: `encoding/json.Encoder` already pools its own scratch buffer internally, so adding ours only added a second pool lookup and a memcpy.
 
 ## 17. Out-of-scope items explicitly deferred
 

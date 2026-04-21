@@ -374,3 +374,57 @@ func TestSnapshotLoadCorruptMagic(t *testing.T) {
 		t.Fatal("expected error for bad magic")
 	}
 }
+
+// populateStoreForBench inserts n random 100-dim vectors so the hot scan path
+// can be measured without the loader / HTTP layer.
+func populateStoreForBench(b *testing.B, n int) *Store {
+	b.Helper()
+	const dim = 100
+	s := New(dim, 16384, n)
+	inputs := make([]Input, n)
+	for i := 0; i < n; i++ {
+		data := make([]float32, dim)
+		for j := 0; j < dim; j++ {
+			data[j] = float32((i*31+j*7)%1000) * 0.013
+		}
+		// guarantee non-zero norm
+		data[0] += 1
+		inputs[i] = Input{Label: fmt.Sprintf("w%d", i), Data: data}
+	}
+	// Batch inserts in chunks to avoid massive single-batch validation cost.
+	const batch = 50000
+	for i := 0; i < n; i += batch {
+		end := i + batch
+		if end > n {
+			end = n
+		}
+		if _, err := s.InsertBatch(inputs[i:end]); err != nil {
+			b.Fatalf("InsertBatch: %v", err)
+		}
+	}
+	return s
+}
+
+// BenchmarkNearestK1 measures full-scan /nearest cost at k=1 at production
+// scale (≈GloVe's 1.29M row count).
+func BenchmarkNearestK1(b *testing.B) {
+	const n = 1_290_000
+	s := populateStoreForBench(b, n)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := s.Nearest("w0", 1); err != nil {
+			b.Fatalf("Nearest: %v", err)
+		}
+	}
+}
+
+func BenchmarkNearestK10(b *testing.B) {
+	const n = 1_290_000
+	s := populateStoreForBench(b, n)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := s.Nearest("w0", 10); err != nil {
+			b.Fatalf("Nearest: %v", err)
+		}
+	}
+}

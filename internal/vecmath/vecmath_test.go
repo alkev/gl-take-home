@@ -82,3 +82,27 @@ func TestInvNormZeroReturnsZero(t *testing.T) {
 		t.Fatalf("InvNorm of zero vector must be 0 to avoid NaN, got %v", got)
 	}
 }
+
+// BenchmarkDot measures Dot on 100-dim float32 vectors — the shape used by
+// Store.Nearest. Reference point for comparing future Dot implementations.
+func BenchmarkDot(b *testing.B) {
+	const dim, nRows = 100, 16384
+	q := make([]float32, dim)
+	rows := make([][]float32, nRows)
+	for i := range q {
+		q[i] = float32(i) * 0.01
+	}
+	for r := range rows {
+		row := make([]float32, dim)
+		for i := range row {
+			row[i] = float32((r+i)%97) * 0.013
+		}
+		rows[r] = row
+	}
+	b.ResetTimer()
+	var sink float32
+	for i := 0; i < b.N; i++ {
+		sink += Dot(q, rows[i%len(rows)])
+	}
+	_ = sink
+}
