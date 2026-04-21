@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
+	"runtime/debug"
 	"strconv"
 	"sync/atomic"
 	"syscall"
@@ -39,6 +41,12 @@ func main() {
 					slog.String("path", cfg.SnapshotPath),
 					slog.Any("err", err))
 			} else {
+				// Snapshot Load mmap'd / buffered the whole file (~520 MB)
+				// then discarded it. Force a GC + scavenge so that transient
+				// heap doesn't stay resident as HeapIdle for minutes. Brings
+				// post-load RSS close to the true steady-state floor.
+				runtime.GC()
+				debug.FreeOSMemory()
 				logger.Info("snapshot loaded",
 					slog.String("path", cfg.SnapshotPath),
 					slog.Int("vectors", s.Len()),
