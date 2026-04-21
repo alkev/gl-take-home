@@ -1,6 +1,6 @@
 # vecstore
 
-In-memory vector store with cosine-similarity search, exposed as a REST/JSON API. Built for the GL-AI-simple-vecstore take-home. See `docs/assignment.md` for the original brief.
+In-memory vector store with cosine-similarity search, exposed as a REST/JSON API. Built for the GL-AI-simple-vecstore take-home. See [`docs/assignment.md`](docs/assignment.md) for the original brief.
 
 **Benchmark results:** [`bench/RESULTS.md`](bench/RESULTS.md) — headline numbers (Apple M1 Pro, 1.29 M vectors): `GET /vector` p99 192 µs, throughput 10 k RPS sustained, `/nearest` p99 31 ms, RSS 1.30 GB.
 
@@ -35,7 +35,7 @@ Sanity-check with the 100-query semantic harness against the loaded service:
 
 ## Configuration
 
-All via environment variables. Full list and defaults in `docs/vecstore-design.md` §11; most common ones:
+All via environment variables. Full list and defaults in [`docs/vecstore-design.md`](docs/vecstore-design.md) §11; most common ones:
 
 | Variable            | Default | Purpose                                    |
 |---------------------|---------|--------------------------------------------|
@@ -59,7 +59,7 @@ make bench                   # Go micro-benchmarks
 make load-test               # vegeta attacks; requires a running service on :8888
 ```
 
-Results on the reference machine: `bench/RESULTS.md`.
+Results on the reference machine: [`bench/RESULTS.md`](bench/RESULTS.md).
 
 ## API
 
@@ -74,14 +74,14 @@ Fixed per the assignment brief. Summary:
 | `POST /snapshot`                              | Trigger a synchronous snapshot           |
 | `GET  /health`                                | Service liveness                         |
 
-Full contract in `docs/assignment.md` §6.
+Full contract in [`docs/assignment.md`](docs/assignment.md) §6.
 
 ## Documentation
 
-| File                         | What's in it                                                    |
-|------------------------------|-----------------------------------------------------------------|
-| `docs/assignment.md`         | Original take-home brief (converted from the provided PDF)     |
-| `docs/assumptions.md`        | All assumptions grouped by topic, with rationale                |
-| `docs/vecstore-design.md`    | Full design doc: architecture, data model, search, persistence  |
-| `docs/optimizations-*.md`    | Session-by-session performance changes with before/after        |
-| `bench/RESULTS.md`           | Benchmark report with hardware/OS specifications                |
+| File                                                  | What's in it                                                    |
+|-------------------------------------------------------|-----------------------------------------------------------------|
+| [`docs/assignment.md`](docs/assignment.md)            | Original take-home brief (converted from the provided PDF)     |
+| [`docs/assumptions.md`](docs/assumptions.md)          | All assumptions grouped by topic, with rationale                |
+| [`docs/vecstore-design.md`](docs/vecstore-design.md)  | Full design doc: architecture, data model, search, persistence  |
+| [`docs/optimizations-1.md`](docs/optimizations-1.md)  | Session-by-session performance changes with before/after        |
+| [`bench/RESULTS.md`](bench/RESULTS.md)                | Benchmark report with hardware/OS specifications                |
