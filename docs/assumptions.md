@@ -43,7 +43,7 @@ Things we took as given — either stated in the brief, or chosen by us where th
 |-----|-------------------------------------------------------------------------------------------------------------------------------------------------|
 | 4.1 | Loader is a separate CLI (`cmd/loader`) that hits `POST /vectors` on the running service — brief says "bulk-inserts into a running instance".   |
 | 4.2 | Loader streams the zipped archive line-by-line; never decompresses the full 560 MB into RAM.                                                    |
-| 4.3 | Failed batches retry with exponential backoff before the loader exits non-zero.                                                                 |
+| 4.3 | Failed batches retry (default 3 times, linear backoff of `attempt × 250 ms`) before the loader exits non-zero.                                  |
 | 4.4 | GloVe archive format is `<word> <f1> ... <f100>\n`, UTF-8, no header — per Stanford NLP docs.                                                   |
 
 ## 5. Persistence (bonus)

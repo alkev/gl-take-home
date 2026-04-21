@@ -2,6 +2,8 @@
 
 In-memory vector store with cosine-similarity search, exposed as a REST/JSON API. Built for the GL-AI-simple-vecstore take-home. See `docs/assignment.md` for the original brief.
 
+**Benchmark results:** [`bench/RESULTS.md`](bench/RESULTS.md) — headline numbers (Apple M1 Pro, 1.29 M vectors): `GET /vector` p99 192 µs, throughput 10 k RPS sustained, `/nearest` p99 31 ms, RSS 1.30 GB.
+
 ## Requirements
 
 - **Go 1.23+** — only hard requirement. macOS: `brew install go`. Other platforms: https://go.dev/dl/.

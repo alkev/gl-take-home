@@ -1,8 +1,6 @@
 # GL-AI-simple-vecstore — Design
 
-**Status:** draft, awaiting review
-**Date:** 2026-04-16
-**Assignment brief:** [`docs/assignment.md`](../../assignment.md)
+**Assignment brief:** [`assignment.md`](assignment.md)
 
 ## 1. Goals
 
@@ -15,8 +13,8 @@ Deliver a single-node, in-memory, production-grade vector store that serves the 
 **Go.** Rationale:
 
 - Standard-library HTTP server is production-grade and sub-millisecond on simple routes.
-- Goroutines + no GIL allow the search hot loop to scale linearly with cores for parallel top-k.
-- Auto-vectorized tight float32 loops are fast enough that we can skip cgo/BLAS; keeps the build hermetic and the Docker image tiny.
+- Goroutines + no GIL allow the search hot loop to scale across cores for parallel top-k.
+- Scalar float32 loops in Go don't auto-SIMD on arm64 today, but on our workload the scan is close enough to the memory-bandwidth ceiling that compute-side wins (BLAS, NEON asm) would buy only 1.5–2× wall-clock. Kept hermetic; no cgo/BLAS.
 - Fast build → small, scratch-based deployable image for the bonus.
 
 Alternatives considered: Rust (better raw perf, longer dev time), Node/TS (viable but needs BLAS binding for the hot path), Python (GIL fights the GET latency targets).
@@ -44,34 +42,43 @@ A single binary `vecstore` holds all embeddings in memory, serves the REST API, 
 ```
 cmd/
   vecstore/         main.go          # service entrypoint
+                    asynclog.go      # channel-buffered async writer wrapping stdout
   loader/           main.go          # loader CLI
+                    upload.go        # batch upload with retries
+  semcheck/         main.go          # 100-query semantic-plausibility harness
 internal/
   config/           config.go        # env var parsing + validation
   store/            store.go         # in-memory store, public API
                     chunks.go        # chunked slab indexing
                     search.go        # parallel top-k
-                    snapshot.go      # persistence
-                    errors.go        # sentinel errors (ErrNotFound, ErrDuplicateLabel)
+                    insert.go        # InsertOne / InsertBatch
+                    get.go           # GetByLabel / GetByUUID + scoped WithByLabel/WithByUUID
+                    compare.go       # pairwise cosine
+                    heap.go          # small-k top-k via min-heap
+                    snapshot.go      # persistence (Save/Load with dirty flag)
+                    errors.go        # sentinel errors
   api/              router.go        # stdlib http.ServeMux wiring + middleware
                     handlers.go      # HTTP handlers
                     requests.go      # request types
                     responses.go     # response types
                     errors.go        # error response helper (writeError)
                     middleware.go    # structured JSON logging, recover, body limit
-  vecmath/          vecmath.go       # L2 normalize, inverse norm, dot product
+  vecmath/          vecmath.go       # Norm, Dot, InvNorm
 testdata/
-  semantic_queries.txt               # fixture list for semantic-correctness harness
+  semantic_queries.txt               # fixture for semcheck (word → plausible set)
 bench/
   RESULTS.md                         # benchmark report
-  targets/                           # vegeta target files (one per scenario)
-  results/                           # vegeta text reports
-  raw/                               # vegeta binary results (for replay/plot)
   run.sh                             # driver script running all scenarios
+  raw/                               # vegeta binary results (for replay/plot)
+  results-on-host/                   # text reports from native bin run
+  results-in-docker/                 # text reports from docker compose run
 Dockerfile
 docker-compose.yml
 docs/
-  assignment.md
-  superpowers/specs/2026-04-16-vecstore-design.md
+  assignment.md                      # original take-home brief
+  assumptions.md                     # assumptions and interpretations
+  vecstore-design.md                 # this file
+  optimizations-1.md                 # perf optimisation retrospective
 ```
 
 ## 5. Data model
@@ -167,9 +174,10 @@ Algorithm for `GET /nearest?word=w&k=k`:
 
 Single `sync.RWMutex` on the `Store`:
 
-- `GET /vector`, `/nearest`, `/compare/*`: `RLock`
-- `POST /vectors`, snapshot write: `Lock` (brief — copy index, then release for I/O)
-- `POST /snapshot` inner: acquires `RLock`, memcpys the `meta` slice and map keys it needs, releases, then streams chunk data from memory (chunks are append-only at the chunk level, so post-release reads of existing chunks are safe)
+- `GET /vector`, `/nearest`, `/compare/*`: `RLock`. `handleGet` uses `Store.WithByLabel` / `WithByUUID` — the RLock is held across the handler's JSON encode + socket write so the `Embedding.Data` returned is a direct view of the row (no copy). Readers don't contend with each other, only writers queue.
+- `POST /vectors`: `Lock`. Validation happens outside the lock; only the commit of `meta` / `byUUID` / `byLabel` entries + `appendRow` is under lock.
+- `Store.Save` (snapshot): holds `RLock` for the serialisation pass (header + label table + vector bytes), then releases before fsync + rename. Short write-lock re-acquisition at the end to clear the `dirty` flag iff `s.n` hasn't grown during the serialise (concurrent inserts simply leave dirty set, so the next Save picks them up).
+- `Store.Load`: `Lock` (wipes and rebuilds).
 
 Read-heavy workload → RWMutex is near-zero overhead. No lock-free gymnastics needed.
 
@@ -269,7 +277,7 @@ A background goroutine ticks every `SNAPSHOT_INTERVAL` and triggers §9.2. If a 
 6. Progress bar: lines parsed, batches sent, errors, vectors/sec.
 7. Exit non-zero if any batch fails after N retries.
 
-Flags: `--url`, `--file`, `--batch-size`, `--workers`, `--retries`.
+Flags: `--url`, `--file`, `--dim`, `--batch-size`, `--workers`, `--retries`, `--skip-download` (see `./bin/loader --help`).
 
 ## 11. Configuration
 
@@ -290,8 +298,9 @@ Config is parsed once at boot; invalid values → fast-fail with a clear error.
 ## 12. Observability
 
 - Structured JSON logs via `log/slog` to stdout.
-- Every request: `method`, `path`, `status`, `latency_ms`, `request_id`, `bytes_in`, `bytes_out`.
-- Per-process: `GOMEMLIMIT` set to e.g. 2 GB via env in the container to bound GC.
+- Every request: `method`, `path`, `status`, `latency_ms`, `request_id`, `bytes_out`.
+- **Async log writer** (`cmd/vecstore/asynclog.go`): stdout is wrapped in a channel-buffered flusher with a `sync.Pool` of byte buffers. Request-path `slog.Info` never pays a stdout syscall; a drain goroutine batches into a `bufio.Writer` and flushes every 50 ms. Kept throughput p99 under concurrent load from being dominated by 10 k syscalls/s. `Close` called from `defer` in `main` so final lines flush on SIGTERM.
+- **Post-load scavenge**: right after a successful `Store.Load`, `runtime.GC()` + `debug.FreeOSMemory()` run once so the ~524 MB snapshot read buffer is returned to the OS immediately instead of sitting in `HeapIdle` for minutes. Makes the reported RSS reflect steady-state.
 - `/health` for Docker HEALTHCHECK.
 
 ## 13. Error handling
@@ -307,7 +316,7 @@ Config is parsed once at boot; invalid values → fast-fail with a clear error.
 |------------------|---------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Unit             | `testing`           | vecmath (normalize, dot, edge cases like zero vectors), chunks (indexing, bounds), store invariants                                                                                                                      |
 | HTTP contract    | `httptest`          | Every row of the brief's §7 acceptance checklist: UUID uniqueness, dim enforcement, read-your-writes, exact top-k correctness, bad-input safety (malformed JSON, oversized body, invalid floats), status codes, error-body shape |
-| Semantic         | Go test harness     | 100 prepared queries (king, paris, computer, …) with a curated set of plausible top-1 words; pass/fail table committed to the repo                                                                                       |
+| Semantic         | `cmd/semcheck` + Go test | 100 prepared queries (king, paris, computer, …) with a curated set of plausible neighbours; PASS if *any* of the returned top-5 is in the expected set — GloVe's neighbourhoods are too broad to pin to a single top-1. Pass/fail table printed by `./bin/semcheck`; exit-code 0 on 100 % pass. |
 | Round-trip       | Go test             | Insert → snapshot → restart → GET/nearest yields identical UUIDs and vectors                                                                                                                                             |
 | Load / benchmark | `testing.B` + vegeta | Every performance target in the brief's §8. vegeta for HTTP-level load (constant-arrival-rate, HDR histograms); `testing.B` for in-process micro-benchmarks (dot product, heap merge).                                 |
 
@@ -319,14 +328,13 @@ Target recap (brief §8): GET p50 < 0.5 ms / p99 < 1 ms; GET ≥ 10k RPS at 32 c
 
 ### Back-of-envelope
 
-Search hot path: 1.2M × 100 FMAs = 120M ops per query. A single modern x86 core with AVX2 FMA (16 FLOPs/cycle at 3.5 GHz = ~56 GFLOPS) does this in ~2 ms. Parallelized across 4 cores → ~0.5 ms compute; add memory bandwidth. 480 MB / 30 GB/s = 16 ms single-threaded memory-bound, but we only scan once per query, well-pipelined with compute. Realistic p99 target: 3-6 ms with 4 cores, 10 ms with plenty of slack.
+Search hot path: 1.29 M × 100 FMAs = ~130 M ops per query. A modern x86 core with AVX2 FMA (16 FLOPs/cycle × 3.5 GHz = ~56 GFLOPS) does this in ~2 ms. 520 MB / 30 GB/s ≈ 17 ms single-threaded memory-bound. Pre-build estimate was 3–6 ms p99 with 4 cores. Actual measured p99 on arm64 M1 Pro is ~31 ms for `k=1` — Go's scalar loop doesn't auto-SIMD on arm64, and goroutine fan-out across cores buys nothing because the scan is already memory-bandwidth-pinned at ~28 GB/s per query. Misses the <10 ms target; see `bench/RESULTS.md` for the list of levers and why each wasn't pursued.
 
 GET p50 < 0.5 ms: lookup is a single map access + memcpy of 400 bytes of float data + JSON encode of 100 floats. Stdlib `encoding/json` encodes this in ~15-25 µs, Go net/http adds ~30-50 µs. Achievable with 50-70% headroom.
 
 ### Micro-optimizations we'll apply
 
-- Response buffers pooled via `sync.Pool`.
-- `io.Copy` + pre-computed byte buffers for frequently-returned fixed-size headers.
+- Log byte-buffers pooled via `sync.Pool` (in the async log writer). Response-buffer pooling was tried and reverted: `encoding/json.Encoder` already pools its own scratch buffer internally, so wrapping it adds a memcpy with no benefit.
 - Tight inner loops kept free of interface dispatch.
 
 ### Benchmark methodology (`bench/RESULTS.md`)
@@ -335,7 +343,7 @@ GET p50 < 0.5 ms: lookup is a single map access + memcpy of 400 bytes of float d
 - Bulk load: wall-clock time of loader end-to-end → vectors/sec.
 - GET latency: single client, 100k sequential requests, per-request wall time, report p50 / p99.
 - GET throughput: `vegeta attack -rate=10000 -duration=60s -workers=32` with a fixed target URL; report from the resulting binary via `vegeta report`. Constant-arrival-rate attack is coordinated-omission-safe.
-- Search latency k=1 and k=10: 10k queries over a shuffled word list, report p50 / p99.
+- Search latency k=1 and k=10: queue-depth-1 vegeta attack (`-rate=0 -max-workers=1 -duration=60s`) hitting `/nearest?word=king`; throughput = 1 / mean_latency. Repeating `king` keeps the harness deterministic — a cache would trivially win and not measure the scan.
 - Memory: `ps -o rss=` on the running process after full load.
 
 ## 16. Design decisions worth flagging for the reviewer
@@ -363,7 +371,7 @@ Per the brief §2:
 
 | Risk                                                   | Mitigation                                                                                                                                                              |
 |--------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Go GC pauses spike under load                          | `GOMEMLIMIT` + preallocated chunks + sync.Pool for response buffers                                                                                                     |
+| Go GC pauses spike under load                          | Preallocated chunks via `INITIAL_CAPACITY`; hot paths return direct slab views (`Store.WithByLabel`) to avoid per-request row-copy allocs; async log writer with pooled buffers so logging doesn't churn GC |
 | Cache pressure from the 480 MB vector set on small VMs | Benchmark on target hardware; document min RSS                                                                                                                          |
 | Loader overwhelms the server with concurrency          | Worker pool is bounded; 429 responses trigger backoff (brief doesn't include 429 — we'd use 503 or let the server slow down via lock contention)                        |
 | Snapshot corruption during write                       | CRC32C + atomic rename + fall-through to empty on corrupt load                                                                                                          |

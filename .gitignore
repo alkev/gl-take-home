@@ -6,3 +6,4 @@ coverage.*
 .DS_Store
 /glove.2024.wikigiga.100d.zip
 /snapshot.bin
+/bench/raw

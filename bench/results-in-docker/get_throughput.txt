@@ -1,0 +1,14 @@
+Requests      [total, rate, throughput]         127495, 2026.20, 321.08
+Duration      [total, attack, wait]             1m18s, 1m3s, 14.958s
+Latencies     [min, mean, 50, 90, 95, 99, max]  4.668ms, 8.934s, 7.918s, 15.206s, 19.275s, 30.236s, 36.29s
+Bytes In      [total, mean]                     25681162, 201.43
+Bytes Out     [total, mean]                     0, 0.00
+Success       [ratio]                           19.61%
+Status Codes  [code:count]                      0:102489  200:25006  
+Error Set:
+Get "http://localhost:8888/vector?word=king": dial tcp 0.0.0.0:0->127.0.0.1:8888: bind: can't assign requested address
+Get "http://localhost:8888/vector?word=king": dial tcp 0.0.0.0:0->127.0.0.1:8888: connect: operation timed out
+Get "http://localhost:8888/vector?word=king": EOF
+Get "http://localhost:8888/vector?word=king": context deadline exceeded (Client.Timeout exceeded while awaiting headers)
+context deadline exceeded (Client.Timeout or context cancellation while reading body)
+Get "http://localhost:8888/vector?word=king": dial tcp 0.0.0.0:0->127.0.0.1:8888: connect: operation timed out (Client.Timeout exceeded while awaiting headers)
