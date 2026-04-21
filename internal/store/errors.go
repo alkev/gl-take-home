@@ -9,6 +9,7 @@ var (
 	ErrNonFiniteValue = errors.New("non-finite value in data")
 	ErrZeroVector     = errors.New("zero vector (norm is zero)")
 	ErrEmptyLabel     = errors.New("empty label")
+	ErrLabelTooLong   = errors.New("label too long")
 	ErrStoreEmpty     = errors.New("store is empty")
 	ErrKOutOfRange    = errors.New("k out of range")
 	// ErrNoChanges signals that Save had nothing new to persist since the

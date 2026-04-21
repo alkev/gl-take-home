@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -93,6 +94,19 @@ func TestInsertRejectsZeroVector(t *testing.T) {
 	s := New(3, 4, 0)
 	if _, err := s.InsertOne("x", []float32{0, 0, 0}); !errors.Is(err, ErrZeroVector) {
 		t.Fatalf("want ErrZeroVector, got %v", err)
+	}
+}
+
+func TestInsertRejectsOverlongLabel(t *testing.T) {
+	s := New(3, 4, 0)
+	label := strings.Repeat("a", 0xFFFF+1) // one byte over the on-disk limit
+	if _, err := s.InsertOne(label, []float32{1, 0, 0}); !errors.Is(err, ErrLabelTooLong) {
+		t.Fatalf("want ErrLabelTooLong, got %v", err)
+	}
+	// At the boundary (exactly 0xFFFF bytes) it must still be accepted.
+	okLabel := strings.Repeat("a", 0xFFFF)
+	if _, err := s.InsertOne(okLabel, []float32{1, 0, 0}); err != nil {
+		t.Fatalf("boundary label (65535 bytes) unexpectedly rejected: %v", err)
 	}
 }
 

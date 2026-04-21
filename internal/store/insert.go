@@ -91,9 +91,17 @@ func (s *Store) InsertBatch(in []Input) ([]uuid.UUID, error) {
 	return ids, nil
 }
 
+// maxLabelBytes matches the uint16 length prefix used by the on-disk
+// snapshot format. Rejecting over-long labels at insert avoids a
+// delayed, confusing failure at the next Save.
+const maxLabelBytes = 0xFFFF
+
 func (s *Store) validate(label string, data []float32) error {
 	if label == "" {
 		return ErrEmptyLabel
+	}
+	if len(label) > maxLabelBytes {
+		return fmt.Errorf("%w: %d bytes, max %d", ErrLabelTooLong, len(label), maxLabelBytes)
 	}
 	if len(data) != s.dim {
 		return fmt.Errorf("%w: got %d, want %d", ErrBadDimension, len(data), s.dim)
